@@ -311,9 +311,9 @@ if home_team == away_team:
 if submitted and home_team != away_team:
     feats, X = build_feature_row(home_team, away_team, int(predict_round), df, meta, elo_dict)
 
-dmat = xgb.DMatrix(X)
-pred_home_decimal = float(np.clip(home_model.predict(dmat)[0], 0, None))
-pred_away_decimal = float(np.clip(away_model.predict(dmat)[0], 0, None))
+    dmat = xgb.DMatrix(X)
+    pred_home_decimal = float(np.clip(home_model.predict(dmat)[0], 0, None))
+    pred_away_decimal = float(np.clip(away_model.predict(dmat)[0], 0, None))
 
 
     pred_home_int = int(np.clip(np.rint(pred_home_decimal), 0, None))
