@@ -1,0 +1,19 @@
+{
+  "model_round_trained_until": 11,
+  "feature_cols": [
+    "home_strength",
+    "away_strength",
+    "strength_diff",
+    "home_avg_scored_pre",
+    "home_avg_conceded_pre",
+    "home_win_rate_pre",
+    "away_avg_scored_pre",
+    "away_avg_conceded_pre",
+    "away_win_rate_pre",
+    "home_advantage",
+    "Round",
+    "home_elo_pre",
+    "away_elo_pre",
+    "elo_diff"
+  ]
+}

@@ -1,53 +1,19 @@
-# ⚽ SPL Match Score Predictor – Streamlit App
+# SPL Predictor (Streamlit)
 
-This application predicts Saudi Pro League football match scores using machine‑learning models trained on historical results, rolling team statistics, tier strength, and Elo ratings.
+## Quick start (local)
+1) Put your exported artifacts under `assets/`:
+   - home_model.json
+   - away_model.json
+   - elo_latest.csv
+   - meta.json (feature columns, optional)
 
-The app is updated round‑by‑round and always reflects the latest available league data.
+2) Install requirements:
+   pip install -r requirements.txt
 
----
+3) Run:
+   streamlit run app.py
 
-## 🔮 Features
-
-- Select **Home Team** and **Away Team** from dropdowns  
-- Click **Predict** to get:
-  - Predicted score (rounded integers)
-  - Match outcome (Home Win / Away Win / Tie)
-- Expand **Details** to view:
-  - Raw decimal predictions
-  - Outcome from decimal model vs rounded score
-  - Elo ratings used for each team
-  - Latest round used in training
-  - Full feature row passed to the model
-
----
-
-## 🗂 Project Structure
-
-```
-spl_streamlit_app/
-│
-├── app.py
-├── requirements.txt
-├── README.md
-├── spl_results.xlsx
-│
-└── assets/
-    ├── home_model.json
-    ├── away_model.json
-    ├── meta.json
-    └── elo_latest.csv
-```
-
----
-
-## 🧠 Model Overview
-
-- Two XGBoost regressors:
-  - `home_model.json` → predicts home goals
-  - `away_model.json` → predicts away goals
-- Feature engineering includes:
-  - Tier strength
-  - Rolling averages (goals scored, conceded, win rate)
-  - Home advantage bias
-  - Optional Elo features
-- The app automatically detects the required feature order from `meta.json`.
+## Deploy (public link)
+1) Push this folder to GitHub
+2) Go to Streamlit Community Cloud
+3) Deploy `app.py`
