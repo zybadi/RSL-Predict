@@ -35,6 +35,7 @@ def load_models_and_meta():
     with open(META_PATH, "r") as f:
         meta = json.load(f)
 
+    # Use Booster since you're loading .json models
     home_model = xgb.Booster()
     away_model = xgb.Booster()
     home_model.load_model(HOME_MODEL_PATH)
@@ -50,7 +51,6 @@ def load_results_excel():
 
     df = pd.read_excel(RESULTS_XLSX)
 
-    # Ensure expected columns exist
     required = {"Round", "Home Team", "Away Team", "Home Score", "Away Score", "Result_Code"}
     missing = required - set(df.columns)
     if missing:
@@ -70,18 +70,16 @@ def normalize_name(x, normalize_map: dict):
 
 
 def build_tiers_and_strength(meta: dict):
-    # ---- Defaults (from your notebook) ----
+    # Defaults (from your notebook)
     default_tier1 = {"Al Hilal", "Al Nassr", "Al Ahli", "Al Ittihad"}
     default_tier2 = {"Al Shabab", "Al Taawoun", "Al Fateh", "Al Qadsiah"}
     default_tier3 = {"Al Ettifaq", "Al Khaleej", "Damac", "Neom S.C.", "Al Khlood"}
     default_strength = {1: 1.6, 2: 1.3, 3: 1.1, 4: 1.0}
 
-    # tiers
     tier1 = set(meta.get("tier1", default_tier1))
     tier2 = set(meta.get("tier2", default_tier2))
     tier3 = set(meta.get("tier3", default_tier3))
 
-    # tier_strength (make keys ints, ensure 4 exists)
     raw_ts = meta.get("tier_strength", default_strength)
     tier_strength = {int(k): float(v) for k, v in raw_ts.items()}
     for k, v in default_strength.items():
@@ -90,18 +88,7 @@ def build_tiers_and_strength(meta: dict):
     return tier1, tier2, tier3, tier_strength
 
 
-def get_tier(team: str, tier1: set, tier2: set, tier3: set) -> int:
-    if team in tier1:
-        return 1
-    if team in tier2:
-        return 2
-    if team in tier3:
-        return 3
-    return 4
-
-
 def get_strength(team: str, tier1: set, tier2: set, tier3: set, tier_strength: dict) -> float:
-    # If not found in any tier => tier 4
     if team in tier1:
         t = 1
     elif team in tier2:
@@ -110,16 +97,10 @@ def get_strength(team: str, tier1: set, tier2: set, tier3: set, tier_strength: d
         t = 3
     else:
         t = 4
-
-    # Safe lookup (never KeyError)
     return float(tier_strength.get(t, 1.0))
 
 
 def build_histories_for_rolling(df_completed: pd.DataFrame):
-    """
-    Rolling stats used by your inference logic:
-    matches, goals scored, goals conceded, wins.
-    """
     work = df_completed.sort_values(["Round"]).reset_index(drop=True)
     teams = pd.unique(work[["Home Team", "Away Team"]].values.ravel("K"))
     hist = {t: {"matches": 0, "gs": 0, "gc": 0, "wins": 0} for t in teams}
@@ -161,7 +142,7 @@ def avg_from_hist(hist: dict, team: str, key: str) -> float:
 def load_elo_latest_dict(normalize_map: dict):
     """
     Load latest Elo ratings from assets/elo_latest.csv and return team->elo dict.
-    This is the source of truth for Elo in Streamlit (no recompute needed).
+    This is the Elo source of truth in Streamlit.
     """
     if not os.path.exists(ELO_LATEST_PATH):
         return {}
@@ -171,7 +152,7 @@ def load_elo_latest_dict(normalize_map: dict):
     except Exception:
         return {}
 
-    # Detect columns
+    # Try to detect columns
     team_col = None
     elo_col = None
     for c in df_elo.columns:
@@ -180,7 +161,6 @@ def load_elo_latest_dict(normalize_map: dict):
         if c.lower() in ["elo", "rating"]:
             elo_col = c
 
-    # Common fallback
     if team_col is None and "Team" in df_elo.columns:
         team_col = "Team"
     if elo_col is None and "Elo" in df_elo.columns:
@@ -201,13 +181,6 @@ def load_elo_latest_dict(normalize_map: dict):
 
 
 def build_feature_row(home_team: str, away_team: str, predict_round: int, df_completed: pd.DataFrame, meta: dict, elo_dict: dict):
-    """
-    Build one feature row exactly in the same order as meta['feature_cols'] expects.
-    Uses:
-      - rolling stats from df_completed
-      - tier strengths from meta (or defaults)
-      - Elo from assets/elo_latest.csv (elo_dict) if Elo features are required
-    """
     feature_cols = meta["feature_cols"]
     tier1, tier2, tier3, tier_strength = build_tiers_and_strength(meta)
 
@@ -230,10 +203,8 @@ def build_feature_row(home_team: str, away_team: str, predict_round: int, df_com
         "home_advantage": 1.0,
     }
 
-    # Add Elo columns only if expected by the model
     need_elo = any(c in feature_cols for c in ["home_elo_pre", "away_elo_pre", "elo_diff"])
     if need_elo:
-        # Use Elo from file; if missing team, fallback to 1500
         h_elo = float(elo_dict.get(home_team, 1500.0))
         a_elo = float(elo_dict.get(away_team, 1500.0))
         row["home_elo_pre"] = h_elo
@@ -242,7 +213,7 @@ def build_feature_row(home_team: str, away_team: str, predict_round: int, df_com
 
     feats = pd.DataFrame([row])
 
-    # Ensure all expected cols exist (fill missing with 0.0)
+    # Ensure all expected columns exist
     for c in feature_cols:
         if c not in feats.columns:
             feats[c] = 0.0
@@ -263,12 +234,9 @@ except Exception as e:
     st.stop()
 
 normalize_map = meta.get("normalize_map", {})
-
-# normalize df team names
 for c in ["Home Team", "Away Team"]:
     df[c] = df[c].map(lambda x: normalize_name(x, normalize_map))
 
-# Elo dict from file (this is what fixes the "1500 for everyone" issue)
 elo_dict = load_elo_latest_dict(normalize_map)
 
 max_round_loaded = int(df["Round"].max())
@@ -291,30 +259,65 @@ with st.expander("Elo Table"):
 
 
 # =========================
-# MAIN UI
+# MAIN UI (with SWAP) ✅ works even before Predict
 # =========================
 teams = sorted(pd.unique(df[["Home Team", "Away Team"]].values.ravel("K")).tolist())
 
-with st.form("predict_form"):
-    col1, col2 = st.columns(2)
-    with col1:
-        home_team = st.selectbox("Home Team", teams, index=0 if teams else None)
-    with col2:
-        away_team = st.selectbox("Away Team", teams, index=1 if len(teams) > 1 else 0)
+# ---- Session-state initialization (prevents warnings) ----
+if "home_team" not in st.session_state:
+    st.session_state.home_team = teams[0] if len(teams) else ""
+if "away_team" not in st.session_state:
+    st.session_state.away_team = teams[1] if len(teams) > 1 else (teams[0] if len(teams) else "")
+if "predict_round" not in st.session_state:
+    st.session_state.predict_round = int(next_round_default)
 
-    predict_round = st.number_input("Round to predict", min_value=1, value=int(next_round_default), step=1)
-    submitted = st.form_submit_button("Predict", type="primary")
+# Ensure stored values still exist in options (safety for future updates)
+if len(teams):
+    if st.session_state.home_team not in teams:
+        st.session_state.home_team = teams[0]
+    if st.session_state.away_team not in teams:
+        st.session_state.away_team = teams[1] if len(teams) > 1 else teams[0]
+
+def do_swap():
+    st.session_state.home_team, st.session_state.away_team = (
+        st.session_state.away_team,
+        st.session_state.home_team,
+    )
+    # No st.rerun(): Streamlit reruns automatically after a click.
+
+# ---- Controls row: Home | 🔁 | Away ----
+c1, c2, c3 = st.columns([5, 1, 5])
+
+with c1:
+    st.selectbox("Home Team", teams, key="home_team")
+
+with c2:
+    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+    st.button("🔁", on_click=do_swap, help="Swap Home/Away", use_container_width=True)
+
+
+with c3:
+    st.selectbox("Away Team", teams, key="away_team")
+
+# Round input (outside form so it updates immediately too)
+st.number_input("Round to predict", min_value=1, step=1, key="predict_round")
+
+# Predict button (you can keep as normal button; form not needed)
+submitted = st.button("Predict", type="primary")
+
+home_team = st.session_state.home_team
+away_team = st.session_state.away_team
+predict_round = int(st.session_state.predict_round)
 
 if home_team == away_team:
     st.warning("Home Team and Away Team are the same. Please select two different teams.")
 
 if submitted and home_team != away_team:
-    feats, X = build_feature_row(home_team, away_team, int(predict_round), df, meta, elo_dict)
+    feats, X = build_feature_row(home_team, away_team, predict_round, df, meta, elo_dict)
 
     dmat = xgb.DMatrix(X)
     pred_home_decimal = float(np.clip(home_model.predict(dmat)[0], 0, None))
     pred_away_decimal = float(np.clip(away_model.predict(dmat)[0], 0, None))
-
 
     pred_home_int = int(np.clip(np.rint(pred_home_decimal), 0, None))
     pred_away_int = int(np.clip(np.rint(pred_away_decimal), 0, None))
@@ -334,7 +337,6 @@ if submitted and home_team != away_team:
     else:
         st.success(f"✅ Rounded outcome: **{outcome_from_rounded}**")
 
-    # Details like your screenshot
     details = {
         "pred_home_decimal": pred_home_decimal,
         "pred_away_decimal": pred_away_decimal,
@@ -349,3 +351,15 @@ if submitted and home_team != away_team:
         st.json(details)
         st.caption("Feature row used by Streamlit:")
         st.dataframe(feats, use_container_width=True)
+
+# =========================
+# FOOTER
+# =========================
+st.markdown(
+    """
+    <div style="margin-top: 30px; text-align: center; font-size: 12px; opacity: 0.7;">
+        Created by <b>Ziyad Albaadi</b>, with a little help from ChatGPT 👀
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
