@@ -277,7 +277,6 @@ next_round_default = max_round_loaded + 1
 st.caption(
     f"✅ This model is trained on results up to **Round {max_round_loaded}**. "
     f"Next predicted round default: **{next_round_default}**."
-    f"Round 10 was postponed, so it's not counted."
 )
 
 # Optional: show Elo table
