@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 import streamlit as st
-from xgboost import XGBRegressor
+import xgboost as xgb
 
 # =========================
 # PATHS (match your folder)
@@ -35,8 +35,8 @@ def load_models_and_meta():
     with open(META_PATH, "r") as f:
         meta = json.load(f)
 
-    home_model = XGBRegressor()
-    away_model = XGBRegressor()
+    home_model = xgb.Booster()
+    away_model = xgb.Booster()
     home_model.load_model(HOME_MODEL_PATH)
     away_model.load_model(AWAY_MODEL_PATH)
 
@@ -311,8 +311,10 @@ if home_team == away_team:
 if submitted and home_team != away_team:
     feats, X = build_feature_row(home_team, away_team, int(predict_round), df, meta, elo_dict)
 
-    pred_home_decimal = float(np.clip(home_model.predict(X)[0], 0, None))
-    pred_away_decimal = float(np.clip(away_model.predict(X)[0], 0, None))
+dmat = xgb.DMatrix(X)
+pred_home_decimal = float(np.clip(home_model.predict(dmat)[0], 0, None))
+pred_away_decimal = float(np.clip(away_model.predict(dmat)[0], 0, None))
+
 
     pred_home_int = int(np.clip(np.rint(pred_home_decimal), 0, None))
     pred_away_int = int(np.clip(np.rint(pred_away_decimal), 0, None))
