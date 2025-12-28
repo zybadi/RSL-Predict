@@ -450,46 +450,16 @@ def train_and_save_models(df_all: pd.DataFrame, meta: dict):
     return home_model, away_model
 
 
-# =========================
-# BOOTSTRAP: load + normalize + append round 11 + retrain if needed
-# =========================
-try:
-    meta = load_meta()
-    df = load_results_excel()
+meta = load_meta()
+df = load_results_excel()
 
-    normalize_map = meta.get("normalize_map", {})
-    for c in ["Home Team", "Away Team"]:
-        df[c] = df[c].map(lambda x: normalize_name(x, normalize_map))
+normalize_map = meta.get("normalize_map", {})
+for c in ["Home Team", "Away Team"]:
+    df[c] = df[c].map(lambda x: normalize_name(x, normalize_map))
 
-    # Ensure round 11 exists in the Excel
-    df, changed = ensure_round_11_exists(df)
-    if changed:
-        save_results_excel(df)
-        st.info("✅ Round 11 was missing — appended to spl_results.xlsx automatically.")
-
-    # Recompute Elo latest and save to assets
-    elo_latest_df, elo_dict_current = recompute_elo_latest(df)
-    elo_latest_df.to_csv(ELO_LATEST_PATH, index=False)
-
-    # Retrain only if new rounds beyond the marker
-    max_round_loaded = int(df["Round"].max())
-    trained_round = read_trained_round_marker()
-
-    # If models missing, force train. If marker behind, retrain.
-    models_exist = os.path.exists(HOME_MODEL_PATH) and os.path.exists(AWAY_MODEL_PATH)
-    need_train = (not models_exist) or (trained_round is None) or (trained_round < max_round_loaded)
-
-    if need_train:
-        with st.spinner(f"Training models through Round {max_round_loaded}..."):
-            home_model, away_model = train_and_save_models(df, meta)
-            write_trained_round_marker(max_round_loaded)
-        st.success(f"✅ Models retrained and saved through Round {max_round_loaded}.")
-    else:
-        home_model, away_model = load_models()
-
-except Exception as e:
-    st.error(str(e))
-    st.stop()
+home_model, away_model = load_models()
+elo_latest_df = pd.read_csv(ELO_LATEST_PATH)
+elo_dict_current = dict(zip(elo_latest_df.Team, elo_latest_df.Elo))
 
 
 # =========================
